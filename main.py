@@ -1,5 +1,7 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Request, Form
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse
 from sqlmodel import SQLModel, Field, Session, create_engine, select, Relationship
 from typing import Optional, List
 from contextlib import asynccontextmanager
@@ -17,10 +19,6 @@ engine = create_engine(f"sqlite:///{sqlite_file_name}", echo=False)
 def create_db():
     SQLModel.metadata.create_all(engine)
 
-# =========================
-# LIFESPAN (FORMA MODERNA)
-# =========================
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db()
@@ -32,11 +30,20 @@ app = FastAPI(
 )
 
 # =========================
+# TEMPLATES Y STATIC
+# =========================
+
+templates = Jinja2Templates(directory="templates")
+
+os.makedirs("static/uploads", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# =========================
 # REDIS (UPSTASH)
 # =========================
 
 redis_client = redis.Redis(
-    host="liked-stingray-38757.upstash.io",  # TU HOST
+    host="liked-stingray-38757.upstash.io",
     port=6379,
     username="default",
     password="AZdlAAIncDEwM2UxMGZhYjQxM2I0ZDUxYjYxZDgzMzgxMGY2ZWNlNHAxMzg3NTc",
@@ -48,23 +55,23 @@ redis_client = redis.Redis(
 # MODELOS
 # =========================
 
-class Producto(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    nombre: str = Field(min_length=3, max_length=50)
-    precio: float = Field(gt=0)
-    usuario_id: int = Field(foreign_key="usuario.id")
-    imagen: Optional[str] = None
-
 class Usuario(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    nombre: str = Field(min_length=3, max_length=50)
-    email: str = Field(min_length=5, max_length=100)
-    productos: List[Producto] = Relationship(back_populates="usuario")
+    nombre: str
+    email: str
+    password: str
+    productos: List["Producto"] = Relationship(back_populates="usuario")
 
-Producto.usuario = Relationship(back_populates="productos")
+class Producto(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    nombre: str
+    precio: float
+    usuario_id: int = Field(foreign_key="usuario.id")
+    imagen: Optional[str] = None
+    usuario: Optional[Usuario] = Relationship(back_populates="productos")
 
 # =========================
-# DEPENDENCIA SESSION
+# SESSION
 # =========================
 
 def get_session():
@@ -72,50 +79,65 @@ def get_session():
         yield session
 
 # =========================
-# CRUD USUARIOS
+# RUTAS HTML
 # =========================
 
-@app.post("/usuarios", response_model=Usuario)
-def crear_usuario(usuario: Usuario, session: Session = Depends(get_session)):
-    session.add(usuario)
+@app.get("/")
+def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/register")
+def vista_register(request: Request):
+    return templates.TemplateResponse("register.html", {"request": request})
+
+@app.get("/login")
+def vista_login(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.get("/editar")
+def editar(request: Request):
+    return templates.TemplateResponse("editar.html", {"request": request})
+
+# =========================
+# REGISTER
+# =========================
+
+@app.post("/register")
+def registrar_usuario(
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    session: Session = Depends(get_session)
+):
+    nuevo_usuario = Usuario(
+        nombre=username,
+        email=email,
+        password=password
+    )
+
+    session.add(nuevo_usuario)
     session.commit()
-    session.refresh(usuario)
-    return usuario
 
-@app.get("/usuarios", response_model=List[Usuario])
-def listar_usuarios(session: Session = Depends(get_session)):
-    return session.exec(select(Usuario)).all()
+    return RedirectResponse(url="/login", status_code=303)
 
-@app.get("/usuarios/{usuario_id}", response_model=Usuario)
-def detalle_usuario(usuario_id: int, session: Session = Depends(get_session)):
-    usuario = session.get(Usuario, usuario_id)
-    if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    return usuario
+# =========================
+# LOGIN
+# =========================
 
-@app.patch("/usuarios/{usuario_id}", response_model=Usuario)
-def actualizar_usuario(usuario_id: int, datos: Usuario, session: Session = Depends(get_session)):
-    usuario = session.get(Usuario, usuario_id)
-    if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+@app.post("/login")
+def login_usuario(
+    email: str = Form(...),
+    password: str = Form(...),
+    session: Session = Depends(get_session)
+):
+    usuario = session.exec(
+        select(Usuario).where(Usuario.email == email)
+    ).first()
 
-    usuario.nombre = datos.nombre
-    usuario.email = datos.email
+    if not usuario or usuario.password != password:
+        return {"error": "Credenciales incorrectas"}
 
-    session.add(usuario)
-    session.commit()
-    session.refresh(usuario)
-    return usuario
-
-@app.delete("/usuarios/{usuario_id}")
-def eliminar_usuario(usuario_id: int, session: Session = Depends(get_session)):
-    usuario = session.get(Usuario, usuario_id)
-    if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-    session.delete(usuario)
-    session.commit()
-    return {"mensaje": "Usuario eliminado"}
+    return RedirectResponse(url="/", status_code=303)
 
 # =========================
 # CRUD PRODUCTOS
@@ -128,36 +150,11 @@ def crear_producto(producto: Producto, session: Session = Depends(get_session)):
     session.refresh(producto)
 
     redis_client.delete("ranking_productos")
-
     return producto
 
 @app.get("/productos", response_model=List[Producto])
 def listar_productos(session: Session = Depends(get_session)):
     return session.exec(select(Producto)).all()
-
-@app.get("/productos/{producto_id}", response_model=Producto)
-def detalle_producto(producto_id: int, session: Session = Depends(get_session)):
-    producto = session.get(Producto, producto_id)
-    if not producto:
-        raise HTTPException(status_code=404, detail="Producto no encontrado")
-    return producto
-
-@app.patch("/productos/{producto_id}", response_model=Producto)
-def actualizar_producto(producto_id: int, datos: Producto, session: Session = Depends(get_session)):
-    producto = session.get(Producto, producto_id)
-    if not producto:
-        raise HTTPException(status_code=404, detail="Producto no encontrado")
-
-    producto.nombre = datos.nombre
-    producto.precio = datos.precio
-
-    session.add(producto)
-    session.commit()
-    session.refresh(producto)
-
-    redis_client.delete("ranking_productos")
-
-    return producto
 
 @app.delete("/productos/{producto_id}")
 def eliminar_producto(producto_id: int, session: Session = Depends(get_session)):
@@ -167,13 +164,12 @@ def eliminar_producto(producto_id: int, session: Session = Depends(get_session))
 
     session.delete(producto)
     session.commit()
-
     redis_client.delete("ranking_productos")
 
     return {"mensaje": "Producto eliminado"}
 
 # =========================
-# ENDPOINT PESADO CON CACHE
+# RANKING CON CACHE
 # =========================
 
 @app.get("/productos/ranking")
@@ -197,11 +193,8 @@ def ranking_productos(session: Session = Depends(get_session)):
     return {"source": "database", "data": productos}
 
 # =========================
-# SUBIDA DE IMÁGENES
+# SUBIR IMAGEN
 # =========================
-
-os.makedirs("static/uploads", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.post("/productos/{producto_id}/imagen")
 def subir_imagen(producto_id: int, file: UploadFile = File(...), session: Session = Depends(get_session)):
