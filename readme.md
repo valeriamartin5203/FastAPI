@@ -363,4 +363,26 @@ Para reportar bugs o sugerencias, contacta al equipo de desarrollo.
 
 ---
 
+## Pagina web
+
+https://fastapi-6fr5.onrender.com/
+
+### Imagenes
+
+<p align="center">
+    <img width="1914" height="941" alt="1" src="https://github.com/user-attachments/assets/08a7c13c-bc15-4d0b-aeab-bf6140d2d726" />
+</p>
+
+
+<p align="center">
+    <img width="1919" height="945" alt="2" src="https://github.com/user-attachments/assets/fc682547-900e-4ea3-a14f-9c00b9d9d7bc" />
+</p>
+
+<p align="center">
+    <img width="1919" height="949" alt="3" src="https://github.com/user-attachments/assets/9b2a2709-5410-43d9-8e7d-c0cc99e6cc5d" />
+</p>
+
+
+---
+
 **Última actualización**: 3 de marzo de 2026
