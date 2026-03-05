@@ -154,7 +154,7 @@ def registrar_usuario(
     return RedirectResponse(url="/", status_code=302)
 
 # =========================
-# LOGIN
+# LOGIN SEGURO
 # =========================
 
 @app.post("/login")
@@ -168,8 +168,12 @@ def login_usuario(
         select(Usuario).where(Usuario.email == email)
     ).first()
 
+    # LOGIN SEGURO (no revela si el usuario existe)
     if not usuario or not verify_password(password, usuario.password):
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+        raise HTTPException(
+            status_code=401,
+            detail="Credenciales inválidas"
+        )
 
     request.session.update({"user": {
         "id": usuario.id,
