@@ -391,4 +391,4 @@ https://fastapi-6fr5.onrender.com/
 
 ---
 
-**Última actualización**: 3 de marzo de 2026
+**Última actualización**: 4 de marzo de 2026
