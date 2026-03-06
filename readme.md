@@ -385,7 +385,11 @@ https://fastapi-6fr5.onrender.com/
 
 <p align="center">
    <img width="1019" height="131" alt="prueba de redis" src="https://github.com/user-attachments/assets/20a0c7a2-ac4d-439d-b625-a395f9873264" />
+</p>
 
+
+<p align="center">
+    <img width="1906" height="945" alt="Captura de pantalla 2026-03-06 111359" src="https://github.com/user-attachments/assets/9d9c0218-1797-4752-b542-9bad84263c2b" />
 </p>
 
 
